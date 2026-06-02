@@ -1,252 +1,160 @@
-# Flood Victim Detection and Risk Analysis System 
+# Flood Victim Detection v4
 
-AI-powered real-time flood monitoring, victim detection, segmentation, and adaptive risk analysis system using Deep Learning and Computer Vision.
+AI-powered flood-scene analysis app for detecting real flood images, segmenting floodwater, and locating people in flood scenes.
 
----
+The current v4 system focuses on:
 
-## Project Overview
+- 3-class flood classification: `non_flood`, `real_flood`, `maps_diagrams`
+- Floodwater segmentation for real flood scenes
+- YOLOv8 person detection and simple tracking
+- Streamlit dashboard for images, videos, and webcam captures
+- Plain person detection output without risk-level scoring
 
-Flood Victim Detection v3 is an advanced AI surveillance and disaster-management platform designed to:
-
-- Detect flooded regions
-- Identify trapped victims
-- Analyze flood severity
-- Estimate human risk levels
-- Provide real-time monitoring dashboard
-
-The system combines:
-
-- Attention U-Net Flood Segmentation
-- YOLOv8 Human Detection
-- Adaptive Risk Engine
-- Victim Tracking
-- Real-Time AI Dashboard
+Risk analysis was removed from the active app flow for now. The old `risk_engine/` module remains in the repository only for possible future restoration.
 
 ---
 
-# Key Features
+## Current Status
 
-- Flood Classification
-- Floodwater Segmentation
-- Victim Detection
-- Real-Time Risk Analysis
-- Human Tracking
-- Webcam Monitoring
-- Video Processing
-- Flood Overlay Visualization
-- AI Analytics Dashboard
-- Streamlit-Based UI
+| Area | Status |
+| --- | --- |
+| Streamlit app | Active |
+| v4 classifier | Active |
+| Flood segmentation | Active |
+| YOLO person detection | Active |
+| Person tracking | Active |
+| Risk levels | Disabled / not shown |
+| Maps, diagrams, posters | Treated as non-real-flood images |
+| Streamlit Cloud readiness | Prepared |
 
 ---
 
-# System Architecture
+## How It Works
 
 ```text
-Input Image / Video / Webcam
-            │
-            ▼
- Flood Classification Model
-            │
-     ┌──────┴──────┐
-     │             │
- NO FLOOD      FLOOD DETECTED
-                     │
-                     ▼
-        Attention U-Net Segmentation
-                     │
-                     ▼
-          YOLOv8 Victim Detection
-                     │
-                     ▼
-            Person Tracking Module
-                     │
-                     ▼
-            Adaptive Risk Engine
-                     │
-                     ▼
-        Real-Time AI Dashboard UI    
+Input image / video / webcam frame
+            |
+            v
+  EfficientNet-B0 v4 classifier
+            |
+    +-------+----------------+
+    |                        |
+Non-flood / diagram      Real flood
+    |                        |
+Skip flood analysis          v
+                  Attention U-Net flood segmentation
+                              |
+                              v
+                    YOLOv8 person detection
+                              |
+                              v
+                    Streamlit dashboard output
+```
 
+For real flood scenes, the app displays:
 
+- Uploaded image
+- Detection result with person boxes
+- Flood overlay
+- Person count
+- Detection table with track ID and person confidence
 
-````
-
----
-
-# AI Models Used
-
-| Component            | Model                |
-| -------------------- | -------------------- |
-| Flood Classification | CNN Classifier       |
-| Flood Segmentation   | Attention U-Net      |
-| Victim Detection     | YOLOv8n              |
-| Tracking             | Centroid Tracker     |
-| Risk Analysis        | Adaptive Risk Engine |
+The detection overlay intentionally does not display `LOW`, `HIGH`, `CRITICAL`, or other risk labels.
 
 ---
 
-# Dataset Information
+## Models Used
 
-## Flood Segmentation Dataset
+| Component | Model / Method |
+| --- | --- |
+| Flood classification | EfficientNet-B0, 3 classes |
+| Flood segmentation | Attention U-Net |
+| Person detection | YOLOv8n |
+| Tracking | Centroid tracker |
+| UI | Streamlit |
 
-* Total Images: 3401
-* Binary Flood Masks
-* Train / Validation / Test Split
+Included model files:
 
-| Split      | Count |
-| ---------- | ----- |
-| Train      | 2380  |
-| Validation | 510   |
-| Test       | 511   |
-
----
-
-# Achieved Results
-
-| Metric                   | Score     |
-| ------------------------ | --------- |
-| Dice Score               | 0.86      |
-| IoU Score                | 0.76      |
-| Validation Loss          | 0.1515    |
-| Real-Time Inference      | Supported |
-| Flood Detection Accuracy | High      |
+- `checkpoints/best_model.pth` - flood segmentation checkpoint
+- `checkpoints/flood_classifier_best.pth` - legacy classifier checkpoint
+- `checkpoints_v4/flood_classifier_v4_best.pth` - active v4 classifier checkpoint
+- `yolov8n.pt` - YOLOv8n detector weights
 
 ---
 
-# Risk Analysis Engine
+## Dataset Notes
 
-The system calculates victim danger levels using:
+The training dataset is not included in GitHub because it is large.
 
-* Flood overlap ratio
-* Local water density
-* Body visibility
-* Segmentation confidence
+Ignored local data/artifacts include:
 
-## Risk Levels
+- `data_v4/`
+- `processed_data/`
+- `outputs/`
+- `outputs_v4/`
+- `tracking.zip`
+- Python cache folders
+- virtual environments
+- last/intermediate checkpoints
 
-* LOW
-* MEDIUM
-* HIGH
-* CRITICAL
-
----
-
-# Streamlit Dashboard Features
-
-## Dashboard Includes
-
-* Futuristic AI UI
-* Cyberpunk Design
-* Glassmorphism Panels
-* Flood Detection Feed
-* Flood Overlay
-* Binary Flood Mask
-* Analytics Cards
-* Risk Tables
-* AI Monitoring Layout
+The repository includes `splits_v4/*.csv` so the v4 split structure is documented, but the actual images must exist locally if you want to retrain or evaluate.
 
 ---
 
-# Tech Stack
-
-## Programming
-
-* Python
-
-## Deep Learning
-
-* PyTorch
-* Ultralytics YOLOv8
-
-## Computer Vision
-
-* OpenCV
-* NumPy
-
-## UI
-
-* Streamlit
-* HTML/CSS
-
-  <img width="1901" height="940" alt="image" src="https://github.com/user-attachments/assets/655bda0d-0711-43f2-ae85-ad64ce40e966" />
-
-
-
----
-
-# Project Structure
+## Project Structure
 
 ```text
-Flood-Victim-Detection/
-│
-├── classification/
-├── configs/
-├── data/
-├── detection/
-├── explainability/
-├── models/
-├── pipeline/
-├── risk_engine/
-├── segmentation/
-├── splits/
-├── streamlit_app/
-├── tracking/
-├── training/
-├── utils/
-├── video/
-├── visualization/
-│
-├── requirements.txt
-├── .gitignore
-└── README.md
+Flood-Victim-Detection-v4/
+|
+|-- classification/
+|   |-- inference/
+|   |-- models/
+|   |-- training/
+|   |-- dataset_v4.py
+|   |-- metrics_v4.py
+|
+|-- checkpoints/
+|-- checkpoints_v4/
+|-- configs/
+|-- detection/
+|-- pipeline/
+|-- segmentation/
+|-- streamlit_app/
+|-- tracking/
+|-- video/
+|-- visualization/
+|
+|-- requirements.txt
+|-- packages.txt
+|-- runtime.txt
+|-- README.md
 ```
 
 ---
 
-# Run Project
+## Run Locally
 
-## 1. Clone Repository
+1. Clone the repository:
 
 ```bash
-git clone https://github.com/MdAshrafhussain889/Flood-Victim-Detection.git
+git clone https://github.com/MdAshrafhussain889/Flood-Victim-Detection-v4.git
+cd Flood-Victim-Detection-v4
 ```
 
----
-
-## 2. Open Project
-
-```bash
-cd Flood-Victim-Detection
-```
-
----
-
-## 3. Create Virtual Environment
+2. Create and activate a virtual environment:
 
 ```bash
 python -m venv venv
-```
-
----
-
-## 4. Activate Environment
-
-### Windows
-
-```bash
 venv\Scripts\activate
 ```
 
----
-
-## 5. Install Requirements
+3. Install dependencies:
 
 ```bash
 pip install -r requirements.txt
 ```
 
----
-
-## 6. Run Streamlit App
+4. Run the Streamlit app:
 
 ```bash
 streamlit run streamlit_app/app.py
@@ -254,38 +162,68 @@ streamlit run streamlit_app/app.py
 
 ---
 
-# Input Modes
+## Streamlit Cloud Deployment
 
-The system supports:
+This repository is prepared for Streamlit Community Cloud.
 
-* Image Upload
-* Video Upload
-* Webcam Monitoring
+Use these deployment settings:
 
----
+| Field | Value |
+| --- | --- |
+| Repository | `MdAshrafhussain889/Flood-Victim-Detection-v4` |
+| Branch | `main` |
+| Main file path | `streamlit_app/app.py` |
 
-# Future Enhancements
-
-* Drone Integration
-* Thermal Imaging
-* GPS-Based Rescue Mapping
-* Cloud Deployment
-* Multi-Camera Monitoring
-* Emergency Alert System
-* Live AI Logs
-* Real-Time FPS Optimization
+`packages.txt` contains Linux system packages needed by OpenCV on Streamlit Cloud.
 
 ---
 
-# Author
+## App Behavior
+
+### Real flood image
+
+The app runs flood segmentation and person detection, then shows the flood overlay and detected persons.
+
+### Non-flood image
+
+The app skips flood analysis and shows a non-flood result.
+
+### Poster, map, chart, or diagram
+
+The v4 classifier may place these in the `maps_diagrams` class. The app treats them as non-real-flood images and skips segmentation/detection.
+
+---
+
+## Training / Evaluation
+
+Create v4 splits:
+
+```bash
+python scripts/create_v4_splits.py
+```
+
+Train v4 classifier:
+
+```bash
+python classification/training/train_classifier_v4.py
+```
+
+Evaluate v4 classifier:
+
+```bash
+python classification/training/evaluate_classifier_v4.py
+```
+
+These commands require the local `data_v4/` image folders.
+
+---
+
+## Author
 
 Mohammed Ashraf Hussain
 
 ---
 
-# License
+## License
 
 This project is developed for research, academic, and AI disaster-management purposes.
-
-```
-```
