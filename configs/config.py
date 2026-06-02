@@ -203,6 +203,16 @@ CLASSIFIER_CHECKPOINT = os.path.join(
     "flood_classifier_best.pth",
 )
 
+CHECKPOINT_V4_DIR = os.path.join(
+    V3_ROOT,
+    "checkpoints_v4",
+)
+
+CLASSIFIER_V4_CHECKPOINT = os.path.join(
+    CHECKPOINT_V4_DIR,
+    "flood_classifier_v4_best.pth",
+)
+
 # ============================================================
 # SEGMENTATION SETTINGS
 # ============================================================
@@ -223,22 +233,17 @@ USE_MORPHOLOGY = True
 USE_CONFIDENCE_SUPPRESSION = True
 
 # ============================================================
-# RISK ENGINE SETTINGS
-# ============================================================
-RISK_LOW_THRESHOLD = 0.25
-
-RISK_MEDIUM_THRESHOLD = 0.50
-
-RISK_HIGH_THRESHOLD = 0.75
-
-# ============================================================
 # YOLO SETTINGS
 # ============================================================
 YOLO_MODEL = "yolov8n.pt"
 
-YOLO_CONF = 0.40
+YOLO_CONF = 0.25
 
-YOLO_CONFIDENCE = 0.40
+YOLO_CONFIDENCE = 0.25
+
+YOLO_IMG_SIZE = 640
+
+YOLO_UPSCALE_MIN_DIM = 640
 
 PERSON_CLASS_ID = 0
 
@@ -261,7 +266,7 @@ VIDEO_OUTPUT_FPS = 20
 # ============================================================
 # STREAMLIT SETTINGS
 # ============================================================
-APP_TITLE = "Flood Victim Detection v3"
+APP_TITLE = "Flood Victim Detection v4"
 
 # ============================================================
 # AUTO CREATE IMPORTANT DIRECTORIES
@@ -276,8 +281,9 @@ os.makedirs(SPLITS_ROOT, exist_ok=True)
 
 os.makedirs(CHECKPOINT_DIR, exist_ok=True)
 
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+os.makedirs(CHECKPOINT_V4_DIR, exist_ok=True)
 
+os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 
 

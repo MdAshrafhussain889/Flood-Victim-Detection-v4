@@ -6,12 +6,7 @@
 import cv2
 import numpy as np
 
-RISK_COLORS = {
-    "LOW":      (0, 255, 0),
-    "MEDIUM":   (0, 255, 255),
-    "HIGH":     (0, 165, 255),
-    "CRITICAL": (0, 0, 255),
-}
+DETECTION_COLOR = (0, 255, 255)
 
 
 def overlay_mask(image, mask):
@@ -24,11 +19,11 @@ def overlay_mask(image, mask):
 def draw_detections(image, detections):
     for det in detections:
         x1, y1, x2, y2 = det["box"]
-        risk     = det.get("risk", "LOW")
         track_id = det.get("track_id", -1)
-        color    = RISK_COLORS.get(risk, (255, 255, 255))
+        color    = DETECTION_COLOR
         cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
-        text = f"ID:{track_id} | {risk}"
+        confidence = det.get("confidence", 0.0) * 100
+        text = f"ID:{track_id} | Person {confidence:.0f}%"
         cv2.putText(image, text, (x1, y1 - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
     return image

@@ -1,63 +1,41 @@
 # ============================================================
 # pipeline/realtime_pipeline.py
-# Real-Time Flood System - Central AI Engine of v3
+# Real-Time Flood System - v4 classifier + detection
 # ============================================================
 
 import sys, os
 
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
-from pipeline.flood_pipeline_v3 import FloodPipelineV3
+from pipeline.flood_pipeline_v4 import FloodPipelineV4
+from classification.inference.classifier_engine_v4 import FloodClassifierEngineV4
 from detection.yolo_detector import YOLOPersonDetector
 from tracking.simple_tracker import SimpleTracker
-from risk_engine.adaptive_risk import (
-    compute_overlap,
-    compute_local_water_density,
-    compute_body_visibility,
-    compute_risk_score,
-    classify_risk,
-)
 
 
 class RealTimeFloodSystem:
     def __init__(self):
-        self.pipeline = FloodPipelineV3()
+        self.pipeline = FloodPipelineV4()
+        if not isinstance(self.pipeline.classifier, FloodClassifierEngineV4):
+            raise RuntimeError(
+                "Expected FloodClassifierEngineV4 in pipeline; "
+                "restart Streamlit (cached old v3 models) or check pipeline imports."
+            )
         self.detector = YOLOPersonDetector()
         self.tracker  = SimpleTracker()
 
     def process_frame(self, image):
         result = self.pipeline.run(image)
 
-        if result["decision"] == "NO FLOOD":
+        if result["decision"] != "FLOOD":
             result["detections"] = []
             return result
 
-        seg = result.get("segmentation")
-        mask_available = bool(seg) and not seg.get("suppressed", False)
-
         detections = self.detector.detect(image)
         detections = self.tracker.update(detections)
-
-        if not mask_available:
-            for det in detections:
-                det["risk"] = "UNKNOWN"
-                det["risk_score"] = 0.0
-                det["overlap"] = 0.0
-            result["detections"] = detections
-            return result
-
-        mask       = seg["mask"]
-        confidence = seg["confidence"]
-
         for det in detections:
-            box        = det["box"]
-            overlap    = compute_overlap(mask, box)
-            density    = compute_local_water_density(mask, box)
-            visibility = compute_body_visibility(box)
-            score      = compute_risk_score(overlap, density, confidence, visibility)
-            risk       = classify_risk(score)
-            det["risk"]       = risk
-            det["risk_score"] = score
-            det["overlap"]    = round(overlap * 100, 1)
-
+            det.pop("risk", None)
+            det.pop("risk_score", None)
+            det.pop("overlap", None)
+            det.pop("water_contact", None)
         result["detections"] = detections
         return result

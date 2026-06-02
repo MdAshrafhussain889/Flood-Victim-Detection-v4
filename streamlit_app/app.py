@@ -1,8 +1,9 @@
 # ============================================================
 # streamlit_app/app.py
-# Flood Victim Detection v3 - Compact Single-Page Dashboard
+# Flood Victim Detection v4 - Compact Single-Page Dashboard
 #
-# Run: streamlit run streamlit_app/app.py
+# Run from project root:
+#   streamlit run streamlit_app/app.py
 # ============================================================
 
 import os
@@ -16,8 +17,11 @@ from PIL import Image
 sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 from pipeline.realtime_pipeline import RealTimeFloodSystem
 from video.video_processor import VideoProcessor
-from visualization.visualizer import overlay_mask, draw_detections
-from configs.config import APP_TITLE
+from visualization.visualizer import overlay_mask
+from configs.config import APP_TITLE, CLASSIFIER_V4_CHECKPOINT
+from classification.inference.classifier_engine_v4 import FloodClassifierEngineV4
+
+PIPELINE_CACHE_KEY = "v4-detection-no-risk-2026-06"
 
 # ============================================================
 # PAGE CONFIG
@@ -86,6 +90,13 @@ st.markdown("""
         color: #1ed878; font-size: 11px; font-weight: 700;
         letter-spacing: 0.12em; text-transform: uppercase;
     }
+    .status-map {
+        display: inline-flex; align-items: center; gap: 6px;
+        background: rgba(80,160,255,0.12); border: 1px solid #4a90ff;
+        border-radius: 4px; padding: 4px 12px;
+        color: #80b8ff; font-size: 11px; font-weight: 700;
+        letter-spacing: 0.12em; text-transform: uppercase;
+    }
     .status-dot { width: 7px; height: 7px; border-radius: 50%; }
     .dot-flood { background: #ff4040; box-shadow: 0 0 5px #ff4040; animation: pulse 1.2s infinite; }
     .dot-safe  { background: #1ed878; }
@@ -124,29 +135,20 @@ st.markdown("""
         padding-bottom: 4px; border-bottom: 1px solid #253350;
     }
 
-    /* ── Risk table ── */
-    .risk-table {
+    /* ── Detection table ── */
+    .detection-table {
         width: 100%; border-collapse: collapse; font-size: 12px;
         font-family: 'Courier New', monospace;
     }
-    .risk-table th {
+    .detection-table th {
         background: #111828; color: #7a98c0; font-size: 10px;
         letter-spacing: 0.1em; text-transform: uppercase;
         padding: 6px 10px; border-bottom: 1px solid #253350;
         text-align: left; font-weight: 700;
     }
-    .risk-table td { padding: 5px 10px; border-bottom: 1px solid #1a2840; color: #c4d8f4; }
-    .risk-table tr:last-child td { border-bottom: none; }
-    .risk-table tr:hover td { background: #141e30; }
-    .risk-badge {
-        display: inline-block; padding: 2px 8px; border-radius: 3px;
-        font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
-    }
-    .r-critical { background:rgba(255,60,60,0.2);  color:#ff6666; border:1px solid rgba(255,60,60,0.5); }
-    .r-high     { background:rgba(255,136,51,0.2); color:#ffaa55; border:1px solid rgba(255,136,51,0.5); }
-    .r-medium   { background:rgba(255,215,0,0.18); color:#ffd700; border:1px solid rgba(255,215,0,0.5); }
-    .r-low      { background:rgba(34,232,122,0.18);color:#22e87a; border:1px solid rgba(34,232,122,0.5); }
-    .r-unknown  { background:rgba(122,152,192,0.16);color:#9bb4d8; border:1px solid rgba(122,152,192,0.45); }
+    .detection-table td { padding: 5px 10px; border-bottom: 1px solid #1a2840; color: #c4d8f4; }
+    .detection-table tr:last-child td { border-bottom: none; }
+    .detection-table tr:hover td { background: #141e30; }
 
     .context-note {
         background: #0d1424; border: 1px solid #253350; border-left: 3px solid #80aaff;
@@ -218,11 +220,17 @@ st.markdown("""
 # INIT (cached)
 # ============================================================
 @st.cache_resource
-def load_system():
-    return RealTimeFloodSystem()
+def load_system(_cache_key=PIPELINE_CACHE_KEY):
+    system = RealTimeFloodSystem()
+    if not isinstance(system.pipeline.classifier, FloodClassifierEngineV4):
+        raise RuntimeError(
+            "Loaded pipeline is not using the v4 classifier. "
+            "Stop Streamlit, use the v4 project folder, and click Reload Models."
+        )
+    return system
 
 @st.cache_resource
-def load_video_processor():
+def load_video_processor(_cache_key=PIPELINE_CACHE_KEY):
     return VideoProcessor()
 
 
@@ -240,27 +248,16 @@ with st.sidebar:
         label_visibility="visible",
     )
 
-    st.markdown("---")
-    st.markdown('<p class="sys-section-hdr">System Info</p>', unsafe_allow_html=True)
-    st.markdown(
-        '<div class="sys-chip">'
-        'Model &nbsp;:&nbsp; Attention U-Net<br>'
-        'Detector :&nbsp; YOLOv8n<br>'
-        'Tracker &nbsp;:&nbsp; Centroid<br>'
-        'Device &nbsp;:&nbsp; CPU'
-        '</div>',
-        unsafe_allow_html=True,
-    )
+    show_mask    = st.checkbox("Show flood overlay", value=True)
+    show_overlay = show_mask
 
-    st.markdown("---")
-    show_mask    = st.checkbox("Flood Mask",    value=True)
-    show_overlay = st.checkbox("Flood Overlay", value=True)
-
-    st.markdown("---")
-    st.markdown(
-        '<p class="stCaption"></p>',
-        unsafe_allow_html=True,
-    )
+    with st.expander("Advanced", expanded=False):
+        if not os.path.exists(CLASSIFIER_V4_CHECKPOINT):
+            st.error("v4 checkpoint missing.")
+        if st.button("Reload models", use_container_width=True):
+            load_system.clear()
+            load_video_processor.clear()
+            st.rerun()
 
 
 # ============================================================
@@ -268,7 +265,7 @@ with st.sidebar:
 # ============================================================
 st.markdown(
     '<div class="fvd-header">'
-    '<span class="fvd-title">Flood Victim Detection v3</span>'
+    '<span class="fvd-title">Flood Victim Detection v4</span>'
     '<span class="fvd-subtitle">Attention U-Net &amp; YOLOv8 · Real-Time Pipeline</span>'
     '</div>',
     unsafe_allow_html=True,
@@ -282,102 +279,60 @@ def bgr_to_rgb(img):
     return cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 
-def render_model_bar(label_text, confidence):
-    pct   = confidence * 100
-    color = "#1ec864" if pct < 30 else "#ff8833" if pct < 60 else "#ff3232"
-    label = "LOW" if pct < 30 else "MODERATE" if pct < 60 else "HIGH"
-    st.markdown(
-        f'<div class="conf-bar-wrap">'
-        f'<span class="conf-label">{label_text}</span>'
-        f'<div class="conf-track"><div class="conf-fill" style="width:{pct:.0f}%;background:{color};"></div></div>'
-        f'<span class="conf-value" style="color:{color};">{label} {pct:.1f}%</span>'
-        f'</div>',
-        unsafe_allow_html=True,
-    )
-
-
-def render_conf_bar(confidence):
-    render_model_bar("SEG CONFIDENCE", confidence)
+def draw_person_detections(image, detections):
+    color = (0, 255, 255)
+    for det in detections:
+        x1, y1, x2, y2 = det["box"]
+        track_id = det.get("track_id", "-")
+        confidence = det.get("confidence", 0.0) * 100
+        cv2.rectangle(image, (x1, y1), (x2, y2), color, 2)
+        cv2.putText(
+            image,
+            f"ID:{track_id} | Person {confidence:.0f}%",
+            (x1, max(y1 - 10, 18)),
+            cv2.FONT_HERSHEY_SIMPLEX,
+            0.6,
+            color,
+            2,
+        )
+    return image
 
 
 def render_metrics(result):
     dets = result.get("detections", [])
-    counts = {"CRITICAL": 0, "HIGH": 0, "MEDIUM": 0, "LOW": 0, "UNKNOWN": 0}
-    for d in dets:
-        r = d.get("risk", "LOW")
-        counts[r] = counts.get(r, 0) + 1
-
     st.markdown(
         f'<div class="metric-row">'
         f'<div class="metric-card"><div class="metric-label">Persons</div><div class="metric-value">{len(dets)}</div></div>'
-        f'<div class="metric-card metric-critical"><div class="metric-label">Critical</div><div class="metric-value">{counts["CRITICAL"]}</div></div>'
-        f'<div class="metric-card metric-high"><div class="metric-label">High</div><div class="metric-value">{counts["HIGH"]}</div></div>'
-        f'<div class="metric-card metric-medium"><div class="metric-label">Medium</div><div class="metric-value">{counts["MEDIUM"]}</div></div>'
-        f'<div class="metric-card metric-low"><div class="metric-label">Low</div><div class="metric-value">{counts["LOW"]}</div></div>'
         f'</div>',
         unsafe_allow_html=True,
     )
 
 
-def render_risk_table(detections):
+def render_detection_table(detections):
     if not detections:
         return
     rows_html = ""
     for i, det in enumerate(detections, 1):
-        x1, y1, x2, y2 = det["box"]
-        risk  = det.get("risk", "LOW")
-        cls   = f"r-{risk.lower()}"
+        track_id = det.get("track_id", "-")
+        det_conf = det.get("confidence", 0) * 100
         rows_html += (
-            f'<tr>'
-            f'<td>{i}</td>'
-            f'<td>{det.get("track_id", "-")}</td>'
-            f'<td><span class="risk-badge {cls}">{risk}</span></td>'
-            f'<td>{det.get("overlap", 0):.1f}%</td>'
-            f'<td>({x1},{y1})→({x2},{y2})</td>'
-            f'</tr>'
+            f"<tr>"
+            f"<td>{i}</td>"
+            f"<td>{track_id}</td>"
+            f"<td>{det_conf:.0f}%</td>"
+            f"</tr>"
         )
     st.markdown(
-        f'<table class="risk-table">'
-        f'<thead><tr><th>#</th><th>Track ID</th><th>Risk</th><th>Overlap</th><th>Bounding Box</th></tr></thead>'
-        f'<tbody>{rows_html}</tbody>'
-        f'</table>',
+        f'<table class="detection-table">'
+        f"<thead><tr><th>#</th><th>Track ID</th><th>Person confidence</th></tr></thead>"
+        f"<tbody>{rows_html}</tbody>"
+        f"</table>",
         unsafe_allow_html=True,
     )
 
 
 def panel(label):
     st.markdown(f'<p class="panel-label">{label}</p>', unsafe_allow_html=True)
-
-
-def is_likely_map_or_diagram(image, detections):
-    if detections:
-        return False
-
-    small = cv2.resize(image, (224, 224), interpolation=cv2.INTER_AREA)
-    gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
-    hsv = cv2.cvtColor(small, cv2.COLOR_BGR2HSV)
-
-    white_ratio = float(np.mean(np.all(small > 215, axis=2)))
-    pale_ratio = float(np.mean((hsv[:, :, 1] < 45) & (hsv[:, :, 2] > 130)))
-    edge_ratio = float(np.mean(cv2.Canny(gray, 50, 150) > 0))
-    quantized = (small // 32).reshape(-1, 3)
-    color_bins = len(np.unique(quantized, axis=0))
-
-    return (
-        white_ratio > 0.30
-        or (white_ratio > 0.18 and edge_ratio > 0.045)
-        or (pale_ratio > 0.55 and color_bins < 120)
-    )
-
-
-def render_context_note():
-    st.markdown(
-        '<div class="context-note">'
-        '<strong>Flood-related image detected.</strong><br>'
-        'No persons detected. Segmentation is not applicable for maps, diagrams, or infographics.'
-        '</div>',
-        unsafe_allow_html=True,
-    )
 
 
 # ============================================================
@@ -387,58 +342,67 @@ def run_inference(frame, system, show_input=True):
     with st.spinner("Analysing…"):
         result = system.process_frame(frame)
 
-    decision = result["decision"]
-    cls_conf = result.get("classification", {}).get("flood_probability", 0.0)
+    classification = result.get("classification", {})
+    class_name = classification.get("class_name", "")
+    cls_conf = classification.get("confidence", 0.0)
+    pipeline_decision = result["decision"]
+    is_map = class_name == "maps_diagrams"
 
-    # ── Status + confidence row ──────────────────────────────
-    row_a, row_b = st.columns([1, 3])
+    row_a, row_b = st.columns([1, 2])
     with row_a:
-        if decision == "NO FLOOD":
+        if pipeline_decision == "FLOOD":
+            st.markdown(
+                '<div class="status-flood">'
+                '<span class="status-dot dot-flood"></span>REAL FLOOD</div>',
+                unsafe_allow_html=True,
+            )
+        elif is_map:
+            st.markdown(
+                '<div class="status-map">'
+                '<span class="status-dot dot-safe"></span>NON-FLOOD IMAGE</div>',
+                unsafe_allow_html=True,
+            )
+        else:
             st.markdown(
                 '<div class="status-no-flood">'
                 '<span class="status-dot dot-safe"></span>NO FLOOD</div>',
                 unsafe_allow_html=True,
             )
-        else:
-            st.markdown(
-                '<div class="status-flood">'
-                '<span class="status-dot dot-flood"></span>FLOOD DETECTED</div>',
-                unsafe_allow_html=True,
-            )
 
     with row_b:
-        render_model_bar("CLS CONFIDENCE", cls_conf)
+        if pipeline_decision == "FLOOD":
+            st.caption(f"Flood confidence: **{cls_conf * 100:.1f}%**")
+        elif is_map:
+            st.caption("Not a real flood scene. Flood analysis skipped.")
+        else:
+            st.caption(f"Not a flood scene ({cls_conf * 100:.1f}% confident).")
 
-    if decision == "NO FLOOD":
+    if pipeline_decision != "FLOOD":
         st.markdown("---")
-        panel("Uploaded Image")
+        panel("Result")
         st.image(bgr_to_rgb(frame), width="stretch")
         return
 
-    seg  = result["segmentation"]
+    seg = result["segmentation"]
     mask = seg["mask"]
-    conf = seg["confidence"]
     dets = result.get("detections", [])
-    map_or_diagram = is_likely_map_or_diagram(frame, dets)
 
-    with row_b:
-        render_conf_bar(conf)
-
-    # ── Metrics row ──────────────────────────────────────────
     render_metrics(result)
-
-    if map_or_diagram:
-        render_context_note()
+    if not dets:
+        st.info(
+            "Flood detected, but **no people were found**. "
+            "Small or blurry images are harder for the detector — try a higher-resolution photo."
+        )
 
     st.markdown("---")
 
     # ── Image grid: determine active columns ─────────────────
     annotated = frame.copy()
-    annotated = draw_detections(annotated, dets)
+    annotated = draw_person_detections(annotated, dets)
 
-    active_cols  = ["input"] if map_or_diagram else ["input", "detection"]
-    if not map_or_diagram and show_overlay: active_cols.append("overlay")
-    if not map_or_diagram and show_mask:    active_cols.append("mask")
+    active_cols = ["input", "detection"]
+    if show_overlay:
+        active_cols.append("overlay")
 
     cols = st.columns(len(active_cols))
     col_map = dict(zip(active_cols, cols))
@@ -459,20 +423,13 @@ def run_inference(frame, system, show_input=True):
             overlay_img  = cv2.addWeighted(frame, 0.65, colored_mask, 0.35, 0)
             st.image(bgr_to_rgb(overlay_img), width="stretch")
 
-    if "mask" in col_map:
-        with col_map["mask"]:
-            panel("Flood Mask")
-            st.image(mask, width="stretch", clamp=True)
-
-    # ── Risk table + download ────────────────────────────────
+    # ── Detection table + download ───────────────────────────
     st.markdown("---")
     tbl_col, dl_col = st.columns([5, 1])
     with tbl_col:
-        panel("Per-Person Risk Details")
+        panel("People detected")
         if dets:
-            render_risk_table(dets)
-        else:
-            st.markdown('<p style="font-size:12px;color:#7a98c0;">No persons detected.</p>', unsafe_allow_html=True)
+            render_detection_table(dets)
 
     with dl_col:
         _, buf = cv2.imencode(".png", annotated)
@@ -486,11 +443,17 @@ def run_inference(frame, system, show_input=True):
 
 
 # ============================================================
-# INPUT MODES
+# RUNTIME CHECK (confirm v4 is active — not a stale v3 tab on :8501)
 # ============================================================
 system          = load_system()
 video_processor = load_video_processor()
 
+if not isinstance(system.pipeline.classifier, FloodClassifierEngineV4):
+    st.error("Wrong classifier loaded — restart from `flood_victim_detection_v4` and use Reload models.")
+
+# ============================================================
+# INPUT MODES
+# ============================================================
 if input_mode == "Image Upload":
     up_col, _ = st.columns([2, 5])
     with up_col:
